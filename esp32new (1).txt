@@ -1,0 +1,146 @@
+#include <Arduino.h>
+#include <IRremoteESP8266.h>
+#include <IRrecv.h>
+#include <IRutils.h>
+#include <ArduinoJson.h>
+#include "Freenove_WS2812_Lib_for_ESP32.h"
+#include <WS2812FX.h>
+#define FADE_DELAY_MS 10 
+#define LED_COUNT  12
+#define LED_PIN	32
+#define CHANNEL		0
+
+Adafruit_NeoPixel strip = Adafruit_NeoPixel(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
+WS2812FX ws2812fx = WS2812FX(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
+#define SDA 13
+#define SCL 14
+int delayval = 300;
+int trailLength = 3; // Adjust this value to set the length of the trail
+#define RECV_PIN     0        // Infrared receiving pin
+IRrecv irrecv(RECV_PIN);      // Create a class object used to receive class
+decode_results results;       // Create a decoding results class object
+StaticJsonDocument<1400> doc;
+
+//The brightness values can be set from 1 to 15, with 1 darkest and 15 brightest
+
+
+void setup() {
+
+  strip.begin();
+  strip.setBrightness(10);
+  strip.show();  
+  Serial.begin(115200);       // Initialize the serial port and set the baud rate to 115200
+  irrecv.enableIRIn();        // Start the receiver
+  Serial.print("IRrecvDemo is now running and waiting for IR message on Pin ");
+  Serial.println(RECV_PIN);   //print the infrared receiving pin
+  
+  
+  
+const char* json = R"JSON(
+  {
+    "codes": {
+      "up-arrow": "954B24C0",
+      "down-arrow": "8F9EABB0",
+      "action": "B500A42E",
+      "right-arrow": "D0B54A71",
+      "left-arrow": "7E9F59F",
+      "power": "9D4ACB7D",
+      "one": "99BF6A07",
+      "two": "F1E7C77B",
+      "three": "F1E7C77B",
+      "four": "87DCA3FB",
+      "five": "5B8D978C",
+      "six": "DB2A57",
+      "seven": "5B8D978C",
+      "eight": "BE27F85A",
+      "nine": "D2CD48BA",
+      "zero": "A794A003",
+      "minus": "4AEE6FCB",
+      "pre_ch": "EB17AD17",
+      "source": "D3FC6AB",
+      "volume_up": "E1C0AB96",
+      "volume_down": "C75FD2E0",
+      "ch_up": "2B600FE9",
+      "ch_down": "646EB67",
+      "mute": "CB47E84A",
+      "ch_list": "28786E56",
+      "sleep": "2543B8AA",
+      "home": "2E4968F5",
+      "guide": "7050364F",
+      "settings": "D337B275",
+      "info": "E6004476",
+      "return": "F0A42931",
+      "exit": "FBC68CFC",
+      "a_btn": "1849DFD6",
+      "b_btn": "1AC13F10" ,
+      "c_btn": "FE2475BF",
+      "d_btn": "E3C39D09",
+      "manuel": "B8325DEA",
+      "p.size": "69AA3D99",
+      "cc/vd": "6019A3E6",
+      "stop": "338B19FE",
+      "reverse": "8657C1E4",
+      "start": "42D4B4D0",
+      "pause": "69AA0061",
+      "forward": "B4B9FBF0"    
+    }
+  }
+)JSON";
+// five and seven produce same hex on my remote and three and two also
+                            
+DeserializationError error = deserializeJson(doc, json);
+if (error) {
+  Serial.print("Failed to parse JSON: ");
+  Serial.println(error.c_str());
+  return;
+}
+
+}
+
+
+void loop() {  
+  if (irrecv.decode(&results)) {
+  unsigned long value = results.value;
+
+  // Match the decoded value with the objects in the JSON data
+  const JsonObject& codes = doc["codes"];
+  for (const JsonPair& pair : codes) {
+    const char* hexCode = pair.value().as<const char*>();
+    const char* name = pair.key().c_str();
+
+      if (strcasecmp(hexCode, String(value, HEX).c_str()) == 0) {
+        if (strcmp(name, "up-arrow") == 0) {
+           for (int i = 0; i < LED_COUNT; i++) {
+    strip.clear(); // Clear all LEDs
+    for (int j = 0; j < trailLength; j++) {
+      int ledIndex = (i + j) % LED_COUNT; // Calculate the index of the current LED in the trail
+      strip.setPixelColor(ledIndex, 0, 0, 255); // Set color to blue for the LEDs in the trail
+    }
+    strip.show(); // Update the LEDs to show the trail
+    delay(delayval);
+           }
+        } else if (strcmp(name, "down-arrow") == 0) {
+          // Code to execute for down-arrow
+            ws2812fx.init();
+  ws2812fx.setBrightness(5); // Set brightness to maximum
+  ws2812fx.setColor(0xFF0000); // Set color to red
+  ws2812fx.setMode(FX_MODE_BLINK);
+  ws2812fx.setSpeed(900); // Adjust blink speed if necessary
+  ws2812fx.start();
+  
+          for (int i = 0; i < 5; i++) {  // Execute the animation for 5 loops or a specific duration
+            ws2812fx.service();
+            delay(delayval);
+          }
+
+          ws2812fx.stop(); // Stop the animation after the specified duration
+
+          ws2812fx.show(); // Update the LEDs to turn them off
+        }
+      }
+
+      irrecv.resume();
+    }
+  }
+}  
+  
